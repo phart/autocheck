@@ -22,7 +22,7 @@ import os
 logger = logging.getLogger()
 
 # Global variables
-version = "0.1.0b"
+version = "0.1.1b"
 output_d = "/var/tmp/go-live"
 level = logging.INFO
 port = 9000
@@ -47,7 +47,6 @@ def usage():
     print ""
     print "    -h, --help           print usage"
     print "    -c, --config CONFIG  config file"
-    print "    -d, --disable        disable web server"
 
 
 class Signal(Exception):
@@ -298,9 +297,7 @@ def rsf_partner(this_node):
 def main():
     # Parse command line arguments
     try:
-        opts, args = getopt.getopt(sys.argv[1:], ":hdio:", ["help", "disable",
-                                                            "ignore",
-                                                            "option="])
+        opts, args = getopt.getopt(sys.argv[1:], ":hc:", ["help", "config="])
     except getopt.GetoptError as err:
         print str(err)
         usage()
@@ -308,7 +305,6 @@ def main():
 
     # Initialize arguments
     config = "autocheck.json"
-    web = True
 
     for o, a in opts:
         if o in ("-h", "--help"):
@@ -316,8 +312,6 @@ def main():
             sys.exit()
         elif o in ("-c", "--config"):
             config = a
-        elif o in ("-d", "--disable"):
-            web = False
 
     # Logging config
     logging.basicConfig(format="%(asctime)s [%(levelname)s] %(message)s",
