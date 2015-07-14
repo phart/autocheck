@@ -1,0 +1,262 @@
+[
+    {
+        "cmd": "nexenta-collector --version",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "cat /etc/system",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "cat /etc/netmasks",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "cat /etc/hosts",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "ifconfig -a",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "cat /etc/defaultrouter",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "netstat -nr",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "md5sum /var/lib/nza/triggers/*",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "cat /usr/lib/fm/fmd/plugins/sensor-transport.conf",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "iostat -En | grep Vendor | sed 's/Serial.*//' | sort  | uniq -c",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "mpathadm list lu | sort | uniq -c",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "echo zfs_resilver_delay/D | mdb -k",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "echo zfs_resilver_min_time_ms/D | mdb -k",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "echo zfs_scrub_delay/D | mdb -k",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "iostat -en | grep -v \"0 c\"",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "lspci -v",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "cat /kernel/drv/scsi_vhci.conf | sed -e \"/^#/d\" -e \"/^[\t ]*$/d\"",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "cat /etc/resolv.conf",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "kstat -p cpu_info:::current_cstate",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "kstat -p cpu_info:::supported_max_cstates",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "showmount -a -e",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "dladm  show-phys | sort",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "dladm  show-aggr | sort",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "dladm  show-link | sort",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "ipmpstat -n -g",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "/opt/HAC/RSF-1/bin/rsfmon -v",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "md5sum /opt/HAC/RSF-1/etc/.res*",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "zfs list",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "zfs get all",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "zpool status",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "nltest /dsgetdcname",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "/opt/HAC/RSF-1/bin/rsfcli -i0 status",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "/opt/HAC/RSF-1/bin/rsfcli -i0 -v list",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "show network service",
+        "type": "nmc",
+        "enabled": true
+    },
+    {
+        "cmd": "show trigger ses-check property",
+        "type": "nmc",
+        "enabled": true
+    },
+    {
+        "cmd": "show appliance runners",
+        "type": "nmc",
+        "enabled": true
+    },
+    {
+        "cmd": "show network ssh-bindings",
+        "type": "nmc",
+        "enabled": true
+    },
+    {
+        "cmd": "show appliance mailer",
+        "type": "nmc",
+        "enabled": true
+    },
+    {
+        "cmd": "show jbod",
+        "type": "nmc",
+        "enabled": true
+    },
+    {
+        "cmd": "show lun slotmap",
+        "type": "nmc",
+        "enabled": true
+    },
+    {
+        "cmd": "show lun smartstat",
+        "type": "nmc",
+        "enabled": true
+    },
+    {
+        "cmd": "show appliance sysinfo",
+        "type": "nmc",
+        "enabled": true
+    },
+    {
+        "cmd": "show appliance license",
+        "type": "nmc",
+        "enabled": true
+    },
+    {
+        "cmd": "show appliance timezone",
+        "type": "nmc",
+        "enabled": true
+    },
+    {
+        "cmd": "show plugin installed",
+        "type": "nmc",
+        "enabled": true
+    },
+    {
+        "cmd": "show auto-scrub",
+        "type": "nmc",
+        "enabled": true
+    },
+    {
+        "cmd": "show auto-sync",
+        "type": "nmc",
+        "enabled": true
+    },
+    {
+        "cmd": "show auto-snap",
+        "type": "nmc",
+        "enabled": true
+    },
+    {
+        "cmd": "show appliance nms property",
+        "type": "nmc",
+        "enabled": true
+    },
+    {
+        "cmd": "show appliance checkpoint",
+        "type": "nmc",
+        "enabled": true
+    },
+    {
+        "cmd": "fmadm faulty",
+        "type": "bash",
+        "enabled": true
+    },
+    {
+        "cmd": "fmdump -eV -t7day",
+        "type": "bash",
+        "enabled": true
+    }
+]

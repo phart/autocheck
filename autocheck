@@ -1,0 +1,418 @@
+#!/usr/bin/env python
+
+"""
+autocheck
+
+Automated System Install Check
+
+Copyright (c) 2015  Nexenta Systems
+William Kettler <william.kettler@nexenta.com>
+"""
+
+import getopt
+import sys
+import logging
+import signal
+import subprocess
+import simplejson
+import os
+
+
+# Logger
+logger = logging.getLogger()
+
+# Global variables
+version = "0.1.0b"
+output_d = "/var/tmp/go-live"
+level = logging.INFO
+port = 9000
+
+
+def usage():
+    """
+    Print usage.
+
+    Inputs:
+        None
+    Outputs:
+        None
+    """
+    cmd = sys.argv[0]
+
+    print "%s [-h] [-c CONFIG]" % cmd
+    print ""
+    print "Automated system implemenation check."
+    print ""
+    print "Arguments:"
+    print ""
+    print "    -h, --help           print usage"
+    print "    -c, --config CONFIG  config file"
+    print "    -d, --disable        disable web server"
+
+
+class Signal(Exception):
+    """
+    This exception is raise by the signal handler.
+    """
+    pass
+
+
+class Timeout(Exception):
+    """
+    This exception is raised when the command exceeds the defined timeout
+    duration and the command is killed.
+    """
+    def __init__(self, cmd, timeout):
+        self.cmd = cmd
+        self.timeout = timeout
+
+    def __str__(self):
+        return "Command '%s' timed out after %d second(s)." % \
+               (self.cmd, self.timeout)
+
+
+class Retcode(Exception):
+    """
+    This exception is raise when a command exits with a non-zero exit status.
+    """
+    def __init__(self, cmd, retcode, output=None):
+        self.cmd = cmd
+        self.retcode = retcode
+        self.output = output
+
+    def __str__(self):
+        return "Command '%s' returned non-zero exit status %d" % \
+               (self.cmd, self.retcode)
+
+
+def alarm_handler(signum, frame):
+    raise Signal
+
+
+def execute(cmd, timeout=600):
+    """
+    Execute a command in the default shell. If a timeout is defined the command
+    will be killed if the timeout is exceeded and an exception will be raised.
+
+    Inputs:
+        cmd     (str): Command to execute
+        timeout (int): Command timeout in seconds
+    Outputs:
+        output (str): STDOUT/STDERR
+    """
+    logger.debug(cmd)
+
+    # Define the timeout signal
+    if timeout:
+        signal.signal(signal.SIGALRM, alarm_handler)
+        signal.alarm(timeout)
+
+    try:
+        # Execute the command and wait for the subprocess to terminate
+        # STDERR is redirected to STDOUT
+        phandle = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
+                                   stderr=subprocess.STDOUT)
+
+        # Read the stdout/sterr buffers and retcode
+        output, _ = phandle.communicate()
+        retcode = phandle.poll()
+    except Signal:
+        # Kill the running process
+        phandle.kill()
+        raise Timeout(cmd=cmd, timeout=timeout)
+    except:
+        logger.debug("Unhandled exception", exc_info=True)
+        raise
+    else:
+        # Possible race condition where alarm isn't disabled in time
+        signal.alarm(0)
+
+    # Raise an exception if the command exited with non-zero exit status
+    if retcode:
+        raise Retcode(cmd, retcode, output=output)
+
+    logger.debug(output)
+
+    return output
+
+
+def execute_cmd(cmd):
+    """
+    Execute a command as defined in the config file and write it to the SIG
+    document.
+
+    Inputs:
+        cmd     (str): Command to execute
+        ignore (bool): Ignore return code
+        timeout (int): Command timeout in seconds
+    Outputs:
+        output (str): stdout/stderr
+    """
+    try:
+        output = execute(cmd)
+    except Retcode, r:
+        logger.error(str(r))
+        output = r.output
+        logger.error(r.output.strip())
+    except Exception, e:
+        logger.error("Unhandled exception executing %s" % cmd)
+        logger.error(str(e))
+        sys.exit(1)
+
+    return output
+
+
+def execute_nmc(cmd):
+    """
+    Execute an NMC command as defined in the config file and write it to the
+    SIG document.
+
+    Inputs:
+        cmd     (str): NMC command to execute
+        ignore (bool): Ignore return code
+        timeout (int): Command timeout in seconds
+    Outputs:
+        output (str): stdout/stderr
+    """
+    nmc_cmd = "nmc -c \"%s\"" % cmd
+    output = execute_cmd(nmc_cmd)
+
+    return output
+
+
+def ssh(cmd, host):
+    """
+    Execute a command on a remote host as defined in the config file and write
+    it to the SIG document.
+
+    Inputs:
+        cmd     (str): Command to execute
+        host    (str): Remote host
+        ignore (bool): Ignore return code
+        timeout (int): Command timeout in seconds
+    Output:
+        output (str): stdout/stderr
+    """
+    ssh_cmd = "ssh %s '%s'" % (host, cmd)
+    output = execute_cmd(ssh_cmd)
+
+    return output
+
+
+def ssh_nmc(cmd, host):
+    """
+    Execute an NMC command on a remote host as defined in the config file
+    and write it to the SIG document.
+
+    Inputs:
+        cmd     (str): NMC command to execute
+        host    (str): Remote host
+        ignore (bool): Ignore return code
+        timeout (int): Command timeout in seconds
+    Outputs:
+        output (str): stdout/stderr
+    """
+    nmc_cmd = "nmc -c \"%s\"" % cmd
+    ssh_nmc = "ssh %s '%s'" % (host, nmc_cmd)
+    output = execute_cmd(ssh_nmc)
+
+    return output
+
+
+def hostname():
+    """
+    Return the system hostname.
+
+    Inputs:
+        None
+    Outputs:
+        hostname (str): System hostname
+    """
+    try:
+        hostname = execute("hostname").strip()
+    except Retcode, r:
+        logger.error("Failed to get system hostname")
+        logger.error(str(r))
+        logger.error(r.output)
+        sys.exit(1)
+
+    return hostname
+
+
+def rsf_partner(this_node):
+    """
+    Return cluster partner hostname.
+
+    Inputs:
+        this_node (str): The hostname of the local host
+    Outputs:
+        that_node (str): Partner hostname
+    """
+    rsfcli = "/opt/HAC/RSF-1/bin/rsfcli -i0"
+    hosts = []
+    that_node = None
+    name = None
+
+    # First try to determine if the cluster is configured.
+    # 4.x makes determination tricky because the service is installed
+    # and running by default.
+
+    # Make sure services are running
+    try:
+        output = execute("%s isrunning" % rsfcli)
+    except Retcode, r:
+        logger.info("RSF services are not running")
+        return that_node
+    except Exception, e:
+        logger.error("Unable to determine RSF service state")
+        logger.error(str(e))
+        sys.exit(1)
+
+    logger.info("RSF service is running")
+
+    # Parse the RSF status
+    output = execute("/opt/HAC/RSF-1/bin/rsfcli status")
+    for l in output.splitlines():
+        if l.startswith("Contacted"):
+            name = l.split()[4].rstrip(",").strip("\"")
+        if l.startswith("Host"):
+            hosts.append(l.split()[1].strip())
+
+    # Check for default 4.x configuration
+    if name == "Ready_For_Cluster_Configuration":
+        logger.info("Cluster is not configured")
+        return that_node
+
+    logger.info("RSF cluster is configured")
+
+    # Determine which clustered host is the partner
+    for h in hosts:
+        if h != this_node:
+            that_node = h
+            logger.info("%s is partner node" % that_node)
+            break
+
+    return that_node
+
+
+def main():
+    # Parse command line arguments
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], ":hdio:", ["help", "disable",
+                                                            "ignore",
+                                                            "option="])
+    except getopt.GetoptError as err:
+        print str(err)
+        usage()
+        sys.exit(2)
+
+    # Initialize arguments
+    config = "autocheck.json"
+    web = True
+
+    for o, a in opts:
+        if o in ("-h", "--help"):
+            usage()
+            sys.exit()
+        elif o in ("-c", "--config"):
+            config = a
+        elif o in ("-d", "--disable"):
+            web = False
+
+    # Logging config
+    logging.basicConfig(format="%(asctime)s [%(levelname)s] %(message)s",
+                        level=level, datefmt='%Y-%m-%d %I:%M:%S')
+
+    # Open the configuration file
+    try:
+        fh = open(config)
+    except Exception, err:
+        logger.error("Failed to open the config file")
+        logger.error(str(err))
+        sys.exit(1)
+
+    # Parse the configuration file
+    try:
+        cmds = simplejson.load(fh, encoding=None, cls=None,
+                               object_hook=None)
+    except Exception, err:
+        logger.error("Failed to parse the config file")
+        logger.error(str(err))
+        sys.exit(1)
+    finally:
+        fh.close()
+
+    # Get hostnames
+    this_node = hostname()
+    that_node = rsf_partner(this_node)
+    hosts = [x for x in [this_node, that_node] if x is not None]
+
+    # Does the output dir exist?
+    if not os.path.exists(output_d):
+        try:
+            os.mkdir(output_d)
+        except Exception, e:
+            logger.error(str(i))
+            sys.exit(1)
+
+    # Open output files
+    fhs = {}
+    for h in hosts:
+        try:
+            f = "%s/nexenta-autocheck-%s.txt" % (output_d, h)
+            logger.info("Logging %s output to %s" % (h, f))
+            fhs[h] = open(f, "w")
+        except Exception, e:
+            logger.error(str(e))
+            sys.exit(1)
+
+    # Build command run list
+    run = {}
+    for cmd in cmds:
+        t = cmd["type"]
+        c = cmd["cmd"]
+        e = cmd["enabled"]
+
+        # Ignore disabled cmds
+        if not e:
+            logger.debug("The command %s is disabled" % c)
+            continue
+
+        try:
+            run[t].append(c)
+        except KeyError:
+            run[t] = []
+            run[t].append(c)
+
+    # Execute on all hosts
+    for h in hosts:
+        logger.info("Executing on %s" % h)
+        for t in run:
+            if t == "bash":
+                logger.info("Executing %s commands on %s" % (len(run[t]), h))
+                if h == this_node:
+                    output = execute_cmd(";".join(run[t]))
+                else:
+                    output = ssh(";".join(run[t]), h)
+            elif t == "nmc":
+                logger.info("Executing %s NMC commands on %s" % (len(run[t]),
+                                                                 h))
+                if h == this_node:
+                    output = execute_nmc(";".join(run[t]))
+                else:
+                    output = ssh_nmc(";".join(run[t]), h)
+            else:
+                logger.error("Invalid command type, %s, in config file" % t)
+                sys.exit(1)
+
+            # Write results to the output file
+            fhs[h].write("%s\n" % output)
+
+    # Close all open files
+    for fh in fhs.itervalues():
+        fh.close()
+
+    logger.info("Complete!")
+
+if __name__ == "__main__":
+    main()
