@@ -1,0 +1,2 @@
+# autocheck
+Automated install check.
