@@ -25,6 +25,7 @@ logger = logging.getLogger()
 version = "0.1.2b"
 output_d = "/var/tmp/go-live"
 level = logging.INFO
+columns = 80
 
 
 def usage():
@@ -172,7 +173,7 @@ def execute_nmc(cmd):
     Outputs:
         output (str): stdout/stderr
     """
-    nmc_cmd = "nmc -c \"%s\"" % cmd
+    nmc_cmd = "stty columns %d; nmc -c \"%s\"" % (columns, cmd)
     output = execute_cmd(nmc_cmd)
 
     return output
@@ -210,11 +211,34 @@ def ssh_nmc(cmd, host):
     Outputs:
         output (str): stdout/stderr
     """
+    #_, columns = stty_size()
     nmc_cmd = "nmc -c \"%s\"" % cmd
-    ssh_nmc = "ssh %s '%s'" % (host, nmc_cmd)
+    ssh_nmc = "ssh -t %s 'stty columns %d; %s'" % (host, columns, nmc_cmd)
     output = execute_cmd(ssh_nmc)
 
     return output
+
+
+def stty_size():
+    """
+    Return the terminal size.
+
+    Inputs:
+        None
+    Outputs:
+        rows    (int): Terminal height
+        columns (int): Terminal width
+    """
+    try:
+        stty = execute("stty")
+    except Exception, e:
+        logger.error("Unable to determine the terminal size")
+        sys.exit(1)
+
+    rows, columns = [int(x.split()[2]) for x
+                     in stty.splitlines()[1].split(";")[:2]]
+
+    return rows, columns
 
 
 def hostname():
@@ -350,9 +374,11 @@ def main():
 
     # Open output files
     fhs = {}
+    diff = []
     for h in hosts:
         try:
             f = "%s/nexenta-autocheck-%s.txt" % (output_d, h)
+            diff.append(f)
             logger.info("Logging %s output to %s" % (h, f))
             fhs[h] = open(f, "w")
         except Exception, e:
