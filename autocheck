@@ -405,6 +405,9 @@ def main():
     for fh in fhs.itervalues():
         fh.close()
 
+    logger.info("/usr/gnu/bin/diff -y --strip-trailing-cr %s | less" %
+            " ".join(diff))
+
     logger.info("Complete!")
 
 if __name__ == "__main__":
